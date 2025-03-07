@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { addMapMouseEvents } from "./map/mouseMovement"
 import "./style.css"
 
 
@@ -72,8 +73,7 @@ function initScene() {
     1,
     3000
   );
-  camera.position.set(0, 800, 800);
-  camera.lookAt(0, 0, 0);
+  camera.position.set(800, 0, 800);
 
   // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -98,33 +98,14 @@ function initScene() {
   dirLight.position.set(300, 400, 300);
   scene.add(dirLight);
 
-  // Territory type mapping (Water, Coast, Land)
-  // This data is from the standard Diplomacy board
-  const territoryTypes = {
-    'ADR': 'Water', 'AEG': 'Water', 'ALB': 'Coast', 'ANK': 'Coast', 'APU': 'Coast',
-    'ARM': 'Coast', 'BAL': 'Water', 'BAR': 'Water', 'BEL': 'Coast', 'BER': 'Coast',
-    'BLA': 'Water', 'BOH': 'Land', 'BRE': 'Coast', 'BUD': 'Land', 'BUL': 'Coast',
-    'BUR': 'Land', 'CLY': 'Coast', 'CON': 'Coast', 'DEN': 'Coast', 'EAS': 'Water',
-    'EDI': 'Coast', 'ENG': 'Water', 'FIN': 'Coast', 'GAL': 'Land', 'GAS': 'Coast',
-    'GRE': 'Coast', 'GOB': 'Water', 'GOL': 'Water', 'HEL': 'Water', 'HOL': 'Coast',
-    'ION': 'Water', 'IRI': 'Water', 'KIE': 'Coast', 'LVP': 'Coast', 'LVN': 'Coast',
-    'LON': 'Coast', 'MAR': 'Coast', 'MAO': 'Water', 'MOS': 'Land', 'MUN': 'Land',
-    'NAP': 'Coast', 'NAO': 'Water', 'NAF': 'Coast', 'NTH': 'Water', 'NWY': 'Coast',
-    'NWG': 'Water', 'PAR': 'Land', 'PIC': 'Coast', 'PIE': 'Coast', 'POR': 'Coast',
-    'PRU': 'Coast', 'ROM': 'Coast', 'RUH': 'Land', 'RUM': 'Coast', 'SER': 'Land',
-    'SEV': 'Coast', 'SIL': 'Land', 'SKA': 'Water', 'SMY': 'Coast', 'SPA': 'Coast',
-    'STP': 'Coast', 'SWE': 'Coast', 'SYR': 'Coast', 'TRI': 'Coast', 'TUN': 'Coast',
-    'TUS': 'Coast', 'TYR': 'Land', 'TYS': 'Water', 'UKR': 'Land', 'VEN': 'Coast',
-    'VIE': 'Land', 'WAL': 'Coast', 'WAR': 'Land', 'WES': 'Water', 'YOR': 'Coast'
-  };
 
-  // Add to global scope for use in other functions
-  window.territoryTypes = territoryTypes;
 
   // Load coordinate data, then build the fallback map
   loadCoordinateData()
     .then(() => {
       createFallbackMap();  // Create the map plane from the start
+      // target the center of the map
+      controls.target = new THREE.Vector3(800, 0, 800)
     })
     .catch(err => {
       console.error("Error loading coordinates:", err);
@@ -136,6 +117,8 @@ function initScene() {
 
   // Handle resizing
   window.addEventListener('resize', onWindowResize);
+  addMapMouseEvents(mapView, infoPanel)
+
 }
 
 // --- ANIMATION LOOP ---
@@ -146,7 +129,7 @@ function animate() {
 
   // >>> ADDED: Camera panning when in playback mode
   if (isPlaying) {
-    cameraPanTime += cameraPanSpeed; 
+    cameraPanTime += cameraPanSpeed;
     // Create a circular arc from SE to SW with vertical wave
     const angle = 0.9 * Math.sin(cameraPanTime) + 1.2;  // range ~0.3..2.1 rad
     const radius = 1200;   // distance from center
@@ -155,7 +138,6 @@ function animate() {
       800 + 100 * Math.sin(cameraPanTime * 0.5),
       radius * Math.sin(angle)
     );
-    camera.lookAt(0, 0, 0);
   } else {
     // Normal camera controls when not in playback
     controls.update();
@@ -402,9 +384,9 @@ function createFallbackMap(ownershipMap = null) {
           })
           // This rotates the SVG the "correct" way round, and scales it down
           group.scale.set(0.5, -0.5, 0.5)
-          // Don't need to flip the text
           textGroup.rotation.x = Math.PI / 2;
           textGroup.scale.set(0.5, -0.5, 0.5)
+
           // After adding all meshes to the group, update its matrix:
           group.updateMatrixWorld(true);
           textGroup.updateMatrixWorld(true);
@@ -414,12 +396,12 @@ function createFallbackMap(ownershipMap = null) {
           const center = new THREE.Vector3();
           box.getCenter(center);
 
-          // Offset the group's position by subtracting the center:
-          group.position.sub(center);
-          textGroup.position.sub(center);
-
           scene.add(group);
           scene.add(textGroup);
+
+          // Set the camera's target to the center of the map
+          controls.target = center
+          camera.position.set(center.x, 800, 800)
         })
         .catch(error => {
           console.error('Error loading map styles:', error);
@@ -1527,7 +1509,7 @@ function updateLeaderboard(phase) {
   sortedPowers.forEach(power => {
     const centers = centerCounts[power] || 0;
     const units = unitCounts[power] || 0;
-    
+
     // Use CSS classes instead of inline styles for better contrast
     html += `<div style="margin: 5px 0; display: flex; justify-content: space-between;">
           <span class="power-${power.toLowerCase()}">${power}</span>
@@ -1967,7 +1949,7 @@ function createChatWindow(power, isGlobal = false) {
   // Create header with appropriate styling
   const header = document.createElement('div');
   header.className = 'chat-header';
-  
+
   // Adjust header to accommodate larger face icons
   header.style.display = 'flex';
   header.style.alignItems = 'center';
@@ -1995,7 +1977,7 @@ function createChatWindow(power, isGlobal = false) {
   faceHolder.style.boxShadow = '0 2px 5px rgba(0,0,0,0.3)'; // Add some depth
   faceHolder.style.border = '2px solid #fff'; // White border for contrast
   faceHolder.id = `face-${power}`; // Add ID for animation targeting
-  
+
   // Generate the face icon and add it to the header
   generateFaceIcon(power).then(dataURL => {
     const img = document.createElement('img');
@@ -2003,17 +1985,17 @@ function createChatWindow(power, isGlobal = false) {
     img.style.width = '100%';
     img.style.height = '100%';
     img.id = `face-img-${power}`; // Add ID for animation targeting
-    
+
     // Add subtle idle animation
     setInterval(() => {
       if (!img.dataset.animating && Math.random() < 0.1) { // Occasionally animate while idle
         idleAnimation(img);
       }
     }, 3000);
-    
+
     faceHolder.appendChild(img);
   });
-  
+
   header.appendChild(faceHolder);
 
   // Create messages container
@@ -2053,9 +2035,9 @@ function updateChatWindows(phase, stepMessages = false) {
 
   // Filter messages relevant to the current power
   const relevantMessages = phase.messages.filter(msg => {
-    return (msg.sender === currentPower || 
-            msg.recipient === currentPower || 
-            msg.recipient === 'GLOBAL');
+    return (msg.sender === currentPower ||
+      msg.recipient === currentPower ||
+      msg.recipient === 'GLOBAL');
   });
 
   // Sort messages by time
@@ -2081,14 +2063,14 @@ function updateChatWindows(phase, stepMessages = false) {
         }
         return;
       }
-      
+
       const msg = relevantMessages[index];
       addMessageToChat(msg, phase.name);
       animateHeadNod(msg);
       index++;
       setTimeout(showNext, 1000); // Show next message after 1 second
     };
-    
+
     // Start the message sequence
     showNext();
   }
@@ -2103,20 +2085,20 @@ function addMessageToChat(msg, phaseName) {
   } else {
     targetPower = msg.sender === currentPower ? msg.recipient : msg.sender;
   }
-  
+
   if (!chatWindows[targetPower]) return;
-  
+
   // Create a unique ID for this message to avoid duplication
   const msgId = `${msg.sender}-${msg.recipient}-${msg.time_sent}-${msg.message}`;
-  
+
   // Skip if we've already shown this message
   if (chatWindows[targetPower].seenMessages.has(msgId)) {
     return;
   }
-  
+
   // Mark as seen
   chatWindows[targetPower].seenMessages.add(msgId);
-  
+
   const messagesContainer = chatWindows[targetPower].messagesContainer;
   const messageElement = document.createElement('div');
 
@@ -2156,21 +2138,21 @@ function animateHeadNod(msg) {
   } else {
     targetPower = msg.sender === currentPower ? msg.recipient : msg.sender;
   }
-  
+
   const chatWindow = chatWindows[targetPower]?.element;
   if (!chatWindow) return;
 
   // Find the face image and animate it
   const img = chatWindow.querySelector(`#face-img-${targetPower}`);
   if (!img) return;
-  
+
   img.dataset.animating = 'true';
-  
+
   // Choose a random animation type for variety
   const animationType = Math.floor(Math.random() * 4);
-  
+
   let animation;
-  
+
   switch (animationType) {
     case 0: // Nod animation
       animation = img.animate([
@@ -2184,7 +2166,7 @@ function animateHeadNod(msg) {
         easing: 'ease-in-out'
       });
       break;
-      
+
     case 1: // Bounce animation
       animation = img.animate([
         { transform: 'translateY(0) scale(1)' },
@@ -2197,7 +2179,7 @@ function animateHeadNod(msg) {
         easing: 'ease-in-out'
       });
       break;
-      
+
     case 2: // Shake animation
       animation = img.animate([
         { transform: 'translate(0, 0) rotate(0deg)' },
@@ -2210,7 +2192,7 @@ function animateHeadNod(msg) {
         easing: 'ease-in-out'
       });
       break;
-      
+
     case 3: // Pulse animation
       animation = img.animate([
         { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(255,255,255,0.7)' },
@@ -2222,7 +2204,7 @@ function animateHeadNod(msg) {
       });
       break;
   }
-  
+
   animation.onfinish = () => {
     img.dataset.animating = 'false';
   };
@@ -2233,7 +2215,7 @@ async function generateFaceIcon(power) {
   if (faceIconCache[power]) {
     return faceIconCache[power];
   }
-  
+
   // Even larger renderer size for better quality
   const offWidth = 192, offHeight = 192; // Increased from 128x128 to 192x192
   const offRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -2245,7 +2227,7 @@ async function generateFaceIcon(power) {
   offScene.background = null;
 
   // Camera
-  const offCamera = new THREE.PerspectiveCamera(45, offWidth/offHeight, 0.1, 1000);
+  const offCamera = new THREE.PerspectiveCamera(45, offWidth / offHeight, 0.1, 1000);
   offCamera.position.set(0, 0, 50);
 
   // Power-specific colors with higher contrast/saturation
@@ -2295,12 +2277,12 @@ async function generateFaceIcon(power) {
   const light = new THREE.DirectionalLight(0xffffff, 1.2); // Increased intensity
   light.position.set(0, 20, 30);
   offScene.add(light);
-  
+
   // Add more lights for better definition
   const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
   fillLight.position.set(-20, 0, 20);
   offScene.add(fillLight);
-  
+
   offScene.add(new THREE.AmbientLight(0xffffff, 0.4)); // Slightly brighter ambient
 
   // Slight head rotation
@@ -2322,7 +2304,7 @@ async function generateFaceIcon(power) {
   const ctx = canvas.getContext('2d');
   const imageData = ctx.createImageData(offWidth, offHeight);
   imageData.data.set(pixels);
-  
+
   // Flip image (WebGL coordinate system is inverted)
   flipImageDataVertically(imageData, offWidth, offHeight);
   ctx.putImageData(imageData, 0, 0);
@@ -2334,16 +2316,16 @@ async function generateFaceIcon(power) {
   // Cleanup
   offRenderer.dispose();
   renderTarget.dispose();
-  
+
   return dataURL;
 }
 
 // Add a subtle idle animation for faces
 function idleAnimation(img) {
   if (img.dataset.animating === 'true') return;
-  
+
   img.dataset.animating = 'true';
-  
+
   const animation = img.animate([
     { transform: 'rotate(0deg) scale(1)' },
     { transform: 'rotate(-2deg) scale(0.98)' },
@@ -2352,7 +2334,7 @@ function idleAnimation(img) {
     duration: 1500,
     easing: 'ease-in-out'
   });
-  
+
   animation.onfinish = () => {
     img.dataset.animating = 'false';
   };
