@@ -17,10 +17,16 @@ export const config = {
   // Whether speech/TTS is enabled (can be toggled via debug menu)
   speechEnabled: import.meta.env.VITE_DEBUG_MODE ? false : true,
 
+  get isTestingMode(): boolean {
+    // have playwrite inject a marker saying that it's testing to brower
+    return import.meta.env.VITE_TESTING_MODE == 'True' || window.isUnderTest;
+  },
+  _isTestingMode: false,
+
   // Whether instant mode is enabled (makes all animations instant)
   // Can be enabled via VITE_INSTANT_MODE env variable or debug menu
   get isInstantMode(): boolean {
-    return import.meta.env.VITE_INSTANT_MODE === 'true' || this._instantModeOverride;
+    return import.meta.env.VITE_INSTANT_MODE === 'True' || this._instantModeOverride;
   },
 
   // Internal flag to allow runtime toggling of instant mode
