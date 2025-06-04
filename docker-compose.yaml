@@ -5,11 +5,11 @@ services:
     cap_add:
       - SYS_ADMIN
     environment:
-      - DISPLAY=:99
+      - DISPLAY=:1
     ports:
       - "9222:9222"
     ipc: host
-    shm_size: "1gb"
+    shm_size: "2gb"
 
   diplomacy:
     build: ai_animation
