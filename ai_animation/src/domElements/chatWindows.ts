@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { gameState } from "../gameState";
 import { config } from "../config";
-import { advanceToNextPhase } from "../phase";
+import { advanceToNextPhase, scheduleNextPhase } from "../phase";
 import { GamePhase, Message } from "../types/gameState";
 import { getPowerDisplayName, getAllPowerDisplayNames } from '../utils/powerNames';
 import { PowerENUM } from '../types/map';
+import { createAnimationsForNextPhase } from "../units/animate";
+import { speakSummary } from "../speech";
 
 
 //TODO: Sometimes the LLMs use lists, and they don't work in the chats. The just appear as bullets within a single line.
@@ -178,7 +180,6 @@ function playChatMessage(messageIndex) {
  * @param stepMessages Whether to animate messages one-by-word (true) or show all at once (false)
  */
 export function updateChatWindows(stepMessages = false) {
-  gameState.messagesPlaying = true
   // Exit early if no messages
   if (!gameState.currentPhase.messages || !gameState.currentPhase.messages.length) {
     console.log("No messages to display for this phase");
@@ -213,10 +214,8 @@ export function updateChatWindows(stepMessages = false) {
         animateHeadNod(msg, (messageCounter % config.soundEffectFrequency === 0));
       }
     });
-    gameState.messagesPlaying = false;
   } else {
     // Stepwise mode: show one message at a time, animating word-by-word
-    gameState.messagesPlaying = true;
     let index = 0;
 
     // Store the start time for debugging
@@ -227,7 +226,6 @@ export function updateChatWindows(stepMessages = false) {
       // If we're not playing or user has manually advanced, stop message animation
       if (!gameState.isPlaying && !config.isDebugMode) {
         console.log("Playback stopped, halting message animations");
-        gameState.messagesPlaying = false;
         return;
       }
 
@@ -236,21 +234,8 @@ export function updateChatWindows(stepMessages = false) {
         if (config.isDebugMode) {
           console.log(`All messages displayed in ${Date.now() - messageStartTime}ms`);
         }
-        gameState.messagesPlaying = false;
-
-        // Trigger unit animations now that messages are done
-        // This imports a circular dependency, so we use a dynamic import
-        import('../units/animate').then(({ createAnimationsForNextPhase }) => {
-          const phaseIndex = gameState.phaseIndex;
-          const isFirstPhase = phaseIndex === 0;
-          const previousPhase = !isFirstPhase && phaseIndex > 0 ? gameState.gameData.phases[phaseIndex - 1] : null;
-
-          if (!isFirstPhase && previousPhase) {
-            console.log("Messages complete, starting unit animations");
-            createAnimationsForNextPhase();
-          }
-        });
-
+        console.log("Messages complete, triggering next phase");
+        scheduleNextPhase();
         return;
       }
 

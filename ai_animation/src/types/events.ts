@@ -8,6 +8,7 @@ export interface ScheduledEvent {
   callback: () => void;
   resolved?: boolean;
   priority?: number;  // Higher numbers execute first for events at same time
+  error?: Error; // If the event caused an error, store it here.
 }
 
 export class EventQueue {
@@ -19,7 +20,7 @@ export class EventQueue {
    * Start the event queue with current time as reference
    */
   start(): void {
-    this.startTime = performance.now() / 1000;
+    this.startTime = performance.now();
     this.isRunning = true;
   }
 
@@ -60,7 +61,12 @@ export class EventQueue {
    * Remove resolved events from the queue
    */
   cleanup(): void {
-    this.events = this.events.filter(event => !event.resolved);
+    let clearedQueue = this.events.filter(event => !event.resolved);
+    if (clearedQueue.length <= 1) {
+      console.log(this.events)
+      throw new Error("We've cleared all the messages out of the queue")
+    }
+    this.events = clearedQueue
   }
 
   /**
@@ -69,13 +75,27 @@ export class EventQueue {
   update(): void {
     if (!this.isRunning) return;
 
-    const now = performance.now() / 1000;
+    const now = performance.now();
     const elapsed = now - this.startTime;
 
     for (const event of this.events) {
       if (!event.resolved && elapsed >= event.triggerAtTime) {
-        event.callback();
-        event.resolved = true;
+        try {
+
+          event.callback();
+        } catch (err) {
+          // TODO: Need some system here to catch and report errors, but we mark them as resolved now so that we don't call an erroring fucntion repeatedly.
+          this.events.slice(this.events.indexOf(event), 1)
+          if (err instanceof Error) {
+            event.error = err
+            console.error(err)
+          } else {
+            console.error(`Got type "${typeof err} as error for event with id ${event.id}`)
+            console.error(err)
+          }
+        } finally {
+          event.resolved = true;
+        }
       }
     }
 
@@ -103,11 +123,11 @@ export class EventQueue {
    * Schedule a simple delay callback (like setTimeout)
    */
   scheduleDelay(delayMs: number, callback: () => void, id?: string): void {
-    const now = performance.now() / 1000;
+    const now = performance.now();
     const elapsed = this.isRunning ? now - this.startTime : 0;
     this.schedule({
       id: id || `delay-${Date.now()}-${Math.random()}`,
-      triggerAtTime: elapsed + (delayMs / 1000), // Schedule relative to current time
+      triggerAtTime: elapsed + (delayMs), // Schedule relative to current time
       callback
     });
   }
@@ -119,23 +139,23 @@ export class EventQueue {
   scheduleRecurring(intervalMs: number, callback: () => void, id?: string): () => void {
     let counter = 0;
     const baseId = id || `recurring-${Date.now()}`;
-    const now = performance.now() / 1000;
+    const now = performance.now();
     const startElapsed = this.isRunning ? now - this.startTime : 0;
-    
+
     const scheduleNext = () => {
       counter++;
       this.schedule({
         id: `${baseId}-${counter}`,
-        triggerAtTime: startElapsed + (intervalMs * counter) / 1000,
+        triggerAtTime: startElapsed + (intervalMs * counter),
         callback: () => {
           callback();
           scheduleNext(); // Schedule the next occurrence
         }
       });
     };
-    
+
     scheduleNext();
-    
+
     // Return cancel function
     return () => {
       // Mark all future events for this recurring schedule as resolved

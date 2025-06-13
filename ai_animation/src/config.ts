@@ -81,7 +81,7 @@ export const config = {
   },
 
   get messageBetweenDelay(): number {
-    return this.isInstantMode ? 1 : this.effectivePlaybackSpeed; // Delay between messages
+    return this.isInstantMode ? 0.001 : this.effectivePlaybackSpeed; // Delay between messages
   },
 
   get messageCompletionDelay(): number {

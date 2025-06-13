@@ -4,7 +4,7 @@ import type { GameSchemaType, Message } from "./types/gameState";
 import { debugMenuInstance } from "./debug/debugMenu.ts"
 import { config } from "./config.ts"
 import { GameSchema, type MessageSchema } from "./types/gameState";
-import { prevBtn, nextBtn, playBtn, speedSelector, mapView, updateGameIdDisplay } from "./domElements";
+import { prevBtn, nextBtn, playBtn, speedSelector, mapView, updateGameIdDisplay, updatePhaseDisplay } from "./domElements";
 import { createChatWindows } from "./domElements/chatWindows";
 import { logger } from "./logger";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
@@ -87,18 +87,11 @@ class GameState {
   gameId: number
   gameData!: GameSchemaType
   momentsData!: NormalizedMomentsData
-  phaseIndex: number
+  _phaseIndex: number
   boardName: string
   currentPower!: PowerENUM
-
-  // state locks
-  messagesPlaying: boolean
-  phaseChatMessages: Message[]
   isPlaying: boolean
-  isSpeaking: boolean
-  isAnimating: boolean
-  isDisplayingMoment: boolean // Used when we're displaying a moment, should pause all other items
-  nextPhaseScheduled: boolean // Flag to prevent multiple phase transitions being scheduled
+
 
   //Scene for three.js
   scene: THREE.Scene
@@ -124,18 +117,10 @@ class GameState {
   eventQueue: EventQueue
 
   constructor(boardName: AvailableMaps) {
-    this.phaseIndex = 0
+    this._phaseIndex = 0
     this.boardName = boardName
-    this.gameId = 16
-    this.phaseChatMessages = []
-
-    // State locks
-    this.isSpeaking = false
+    this.gameId = 0
     this.isPlaying = false
-    this.isAnimating = false
-    this.isDisplayingMoment = false
-    this.messagesPlaying = false
-    this.nextPhaseScheduled = false
 
     this.scene = new THREE.Scene()
     this.unitMeshes = []
@@ -144,6 +129,13 @@ class GameState {
     this.deltaTime = 0
     this.eventQueue = new EventQueue()
     this.loadBoardState()
+  }
+  set phaseIndex(val: number) {
+    this._phaseIndex = val
+    updatePhaseDisplay()
+  }
+  get phaseIndex() {
+    return this._phaseIndex
   }
 
   /**
@@ -196,6 +188,8 @@ class GameState {
             .then((data) => {
               const parsedData = JSON.parse(data);
 
+              // FIXME: Why do we have two different moments data types?!? There should only be a single one.
+              //
               // Check if this is the comprehensive format and normalize it
               if ('analysis_results' in parsedData && parsedData.analysis_results) {
                 // Transform comprehensive format to animation format
@@ -378,7 +372,7 @@ class GameState {
 
   checkPhaseHasMoment = (phaseName: string): Moment | null => {
     let momentMatch = this.momentsData.moments.filter((moment) => {
-      return moment.phase === phaseName
+      return moment.phase === phaseName && moment.raw_messages.length > 0
     })
 
     // If there is more than one moment per turn, only return the largest one.
