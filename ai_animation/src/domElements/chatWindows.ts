@@ -157,19 +157,7 @@ function fiterAndSortChatMessagesForPhase(phase: GamePhase): Message[] {
   relevantMessages.sort((a, b) => a.time_sent - b.time_sent);
   return relevantMessages
 }
-/**
- * updates the gameState.phaseChatMessages array to the messages for this phase.
- *
- */
-export function initChatMessagesForPhase() {
-  gameState.phaseChatMessages = []
-  gameState.phaseChatMessages = fiterAndSortChatMessagesForPhase(gameState.gameData.phases[gameState.phaseIndex])
-}
 
-function playChatMessage(messageIndex) {
-  addMessageToChat(gameState.currentPhase)
-
-}
 // Modified to accumulate messages instead of resetting and only animate for new messages
 /**
  * Updates chat windows with messages for the current phase
@@ -180,7 +168,6 @@ export function updateChatWindows(stepMessages = false, callback?: () => void) {
   // Exit early if no messages
   if (!gameState.currentPhase.messages || !gameState.currentPhase.messages.length) {
     console.log("No messages to display for this phase");
-    gameState.messagesPlaying = false;
     return;
   }
 
@@ -201,73 +188,54 @@ export function updateChatWindows(stepMessages = false, callback?: () => void) {
     console.log(`Found ${relevantMessages.length} messages for player ${gameState.currentPower} in phase ${gameState.currentPhase.name}`);
   }
 
-  if (!stepMessages) {
-    // Normal mode: show all messages at once
-    relevantMessages.forEach(msg => {
-      const isNew = addMessageToChat(msg);
-      if (isNew) {
-        // Increment message counter and play sound on every third message
-        messageCounter++;
-        animateHeadNod(msg, (messageCounter % config.soundEffectFrequency === 0));
-      }
-    });
-  } else {
-    // Stepwise mode: show one message at a time, animating word-by-word
-    let index = 0;
+  // Stepwise mode: show one message at a time, animating word-by-word
+  let index = 0;
 
-    // Store the start time for debugging
-    const messageStartTime = Date.now();
+  // Store the start time for debugging
+  const messageStartTime = Date.now();
 
-    // Function to process the next message
-    const showNext = () => {
-      // If we're not playing or user has manually advanced, stop message animation
-      if (!gameState.isPlaying && !config.isDebugMode) {
-        console.log("Playback stopped, halting message animations");
-        return;
-      }
+  // Function to process the next message
+  const showNext = () => {
+    // If we're not playing or user has manually advanced, stop message animation
+    if (!gameState.isPlaying && !config.isDebugMode) {
+      console.log("Playback stopped, halting message animations");
+      return;
+    }
 
-      // All messages have been displayed
-      if (index >= relevantMessages.length) {
-        if (config.isDebugMode) {
-          console.log(`All messages displayed in ${Date.now() - messageStartTime}ms`);
-        }
-        console.log("Messages complete, triggering next phase");
-        if (callback) callback();
-        return;
-      }
-
-      // Get the next message
-      const msg = relevantMessages[index];
-
-      // Only log in debug mode to reduce console noise
+    // All messages have been displayed
+    if (index >= relevantMessages.length) {
       if (config.isDebugMode) {
-        console.log(`Displaying message ${index + 1}/${relevantMessages.length}: ${msg.sender} to ${msg.recipient}`);
+        console.log(`All messages displayed in ${Date.now() - messageStartTime}ms`);
       }
+      console.log("Messages complete, triggering next phase");
+      if (callback) callback();
+      return;
+    }
 
-      // Function to call after message animation completes
-      const onMessageComplete = () => {
-        index++; // Only increment after animation completes
+    // Get the next message
+    const msg = relevantMessages[index];
 
-        // Schedule next message with proper delay
-        gameState.eventQueue.scheduleDelay(config.messageBetweenDelay, showNext, `show-next-message-${index}-${Date.now()}`);
-      };
+    // Only log in debug mode to reduce console noise
+    if (config.isDebugMode) {
+      console.log(`Displaying message ${index + 1}/${relevantMessages.length}: ${msg.sender} to ${msg.recipient}`);
+    }
 
-      // Add the message with word animation
-      const isNew = addMessageToChat(msg, true, onMessageComplete);
-
-      // Handle non-new messages
-      if (!isNew) {
-        onMessageComplete(); // Skip animation for already seen messages
-      } else {
-        // Animate head and play sound for new messages (not just when not in debug mode)
-        messageCounter++;
-        animateHeadNod(msg, (messageCounter % config.soundEffectFrequency === 0));
-      }
+    // Function to call after message animation completes
+    const onMessageComplete = () => {
+      index++; // Only increment after animation completes
+      showNext()
     };
 
-    // Start the message sequence with initial delay
-    gameState.eventQueue.scheduleDelay(50, showNext, `start-message-sequence-${Date.now()}`);
-  }
+    // Add the message with word animation
+    addMessageToChat(msg, true, onMessageComplete);
+
+    // Animate head and play sound for new messages (not just when not in debug mode)
+    messageCounter++;
+    animateHeadNod(msg, (messageCounter % config.soundEffectFrequency === 0));
+  };
+
+  // Start the message sequence with initial delay
+  gameState.eventQueue.scheduleDelay(50, showNext, `start-message-sequence-${Date.now()}`);
 }
 
 // Modified to support word-by-word animation and callback
