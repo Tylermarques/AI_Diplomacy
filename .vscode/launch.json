@@ -4,7 +4,7 @@
     {
       "type": "pwa-chrome",
       "request": "launch",
-      "name": "Firefox Debug 5179",
+      "name": "Chrome Debug 5179",
       "url": "http://localhost:5179",
       "webRoot": "${workspaceFolder}/ai_animation/",
       "sourceMapPathOverrides": {

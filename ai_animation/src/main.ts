@@ -18,6 +18,9 @@ import { togglePlayback } from "./phase";
 const isStreamingMode = import.meta.env.VITE_STREAMING_MODE
 const phaseStartIdx = undefined;
 
+// Panic flag to stop execution when critical errors occur
+let hasPanicked = false;
+
 // --- INITIALIZE SCENE ---
 function initScene() {
   gameState.createThreeScene()
@@ -157,11 +160,19 @@ function updateAnimations() {
  * Handles camera movement, animations, and game state transitions
  */
 function animate() {
+  if (hasPanicked) return; // Stop the loop if we've panicked
+  
+  try {
+    // All things that aren't ThreeJS items happen in the eventQueue. The queue if filled with the first phase before the animate is kicked off, then all subsequent events are updated when other events finish. F
+    // For instance, when the messages finish playing, they should kick off the check to see if we should advance turns.
+    gameState.eventQueue.update();
+  } catch (error) {
+    console.error('CRITICAL ERROR - STOPPING EXECUTION:', error);
+    hasPanicked = true;
+    return; // Exit without scheduling next frame
+  }
+  
   requestAnimationFrame(animate);
-
-  // All things that aren't ThreeJS items happen in the eventQueue. The queue if filled with the first phase before the animate is kicked off, then all subsequent events are updated when other events finish. F
-  // For instance, when the messages finish playing, they should kick off the check to see if we should advance turns.
-  gameState.eventQueue.update();
 
   if (gameState.isPlaying) {
     // Update the camera angle

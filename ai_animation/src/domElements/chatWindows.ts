@@ -1,12 +1,9 @@
 import * as THREE from "three";
 import { gameState } from "../gameState";
 import { config } from "../config";
-import { advanceToNextPhase, scheduleNextPhase } from "../phase";
 import { GamePhase, Message } from "../types/gameState";
-import { getPowerDisplayName, getAllPowerDisplayNames } from '../utils/powerNames';
+import { getPowerDisplayName } from '../utils/powerNames';
 import { PowerENUM } from '../types/map';
-import { createAnimationsForNextPhase } from "../units/animate";
-import { speakSummary } from "../speech";
 
 
 //TODO: Sometimes the LLMs use lists, and they don't work in the chats. The just appear as bullets within a single line.
@@ -179,7 +176,7 @@ function playChatMessage(messageIndex) {
  * @param phase The current game phase containing messages
  * @param stepMessages Whether to animate messages one-by-word (true) or show all at once (false)
  */
-export function updateChatWindows(stepMessages = false) {
+export function updateChatWindows(stepMessages = false, callback?: () => void) {
   // Exit early if no messages
   if (!gameState.currentPhase.messages || !gameState.currentPhase.messages.length) {
     console.log("No messages to display for this phase");
@@ -235,7 +232,7 @@ export function updateChatWindows(stepMessages = false) {
           console.log(`All messages displayed in ${Date.now() - messageStartTime}ms`);
         }
         console.log("Messages complete, triggering next phase");
-        scheduleNextPhase();
+        if (callback) callback();
         return;
       }
 

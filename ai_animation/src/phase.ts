@@ -46,14 +46,6 @@ export function _setPhase(phaseIndex: number) {
     gameState.phaseIndex = phaseIndex
     displayPhase(true)
   } else {
-    // Clear any existing animations to prevent overlap
-    // (playbackTimer is replaced by event queue system)
-
-
-    // Reset event queue for new phase with cleanup callback
-    gameState.eventQueue.reset(() => {
-    });
-
     if (gameState.isPlaying) {
       gameState.eventQueue.start();
     }
@@ -240,11 +232,7 @@ export function displayPhase(skipMessages = false) {
   updateLeaderboard();
 
   // Show messages with animation or immediately based on skipMessages flag
-  if (!skipMessages) {
-    updateChatWindows(true);
-  } else {
-    gameState.messagesPlaying = false;
-  }
+  updateChatWindows(true, scheduleNextPhase);
 
   // Only animate if not the first phase and animations are requested
   if (!isFirstPhase && !skipMessages) {
@@ -252,12 +240,10 @@ export function displayPhase(skipMessages = false) {
       try {
         // Don't create animations immediately if messages are still playing
         // The main loop will handle this when messages finish
-        if (!gameState.messagesPlaying) {
-          createAnimationsForNextPhase();
-        }
+        createAnimationsForNextPhase();
       } catch (error) {
         console.warn(`Caught below error when attempting to create animations. Moving on without them.`)
-        console.error(error)
+        console.warn(error)
         initUnits(gameState.phaseIndex)
 
       }
