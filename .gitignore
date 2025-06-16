@@ -155,3 +155,6 @@ model_power_statistics.csv
 **/test-results/
 **/playwright-report/
 /diplomacy_cicero
+
+## LLM stuff
+**/.claude/
