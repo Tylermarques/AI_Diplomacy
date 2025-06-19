@@ -1,20 +1,18 @@
+from pathlib import Path
 from dotenv import load_dotenv
-import logging
 import os
 from typing import Dict, List, Tuple, Set, Optional
 from diplomacy import Game
 import csv
 from typing import TYPE_CHECKING
+from loguru import logger
 
 # Avoid circular import for type hinting
 if TYPE_CHECKING:
     from .clients import BaseModelClient
     # If DiplomacyAgent is used for type hinting for an 'agent' parameter:
-    # from .agent import DiplomacyAgent 
+    # from .agent import DiplomacyAgent
 
-logger = logging.getLogger("utils")
-logger.setLevel(logging.INFO)
-logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 
@@ -24,17 +22,17 @@ def assign_models_to_powers() -> Dict[str, str]:
     Example usage: define which model each power uses.
     Return a dict: { power_name: model_id, ... }
     POWERS = ['AUSTRIA', 'ENGLAND', 'FRANCE', 'GERMANY', 'ITALY', 'RUSSIA', 'TURKEY']
-    Models supported: o3-mini, o4-mini, o3, gpt-4o, gpt-4o-mini, 
-                    claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-5-haiku-20241022, claude-3-5-sonnet-20241022, claude-3-7-sonnet-20250219 
-                    gemini-2.0-flash, gemini-2.5-flash-preview-04-17, gemini-2.5-pro-preview-03-25, 
+    Models supported: o3-mini, o4-mini, o3, gpt-4o, gpt-4o-mini,
+                    claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-5-haiku-20241022, claude-3-5-sonnet-20241022, claude-3-7-sonnet-20250219
+                    gemini-2.0-flash, gemini-2.5-flash-preview-04-17, gemini-2.5-pro-preview-03-25,
                     deepseek-chat, deepseek-reasoner
                     openrouter-meta-llama/llama-3.3-70b-instruct, openrouter-qwen/qwen3-235b-a22b, openrouter-microsoft/phi-4-reasoning-plus:free,
-                    openrouter-deepseek/deepseek-prover-v2:free, openrouter-meta-llama/llama-4-maverick:free, openrouter-nvidia/llama-3.3-nemotron-super-49b-v1:free, 
+                    openrouter-deepseek/deepseek-prover-v2:free, openrouter-meta-llama/llama-4-maverick:free, openrouter-nvidia/llama-3.3-nemotron-super-49b-v1:free,
                     openrouter-google/gemma-3-12b-it:free, openrouter-google/gemini-2.5-flash-preview-05-20
     """
-    
+
     # POWER MODELS
-    
+
     return {
         "AUSTRIA": "o3",
         "ENGLAND": "gpt-4.1-2025-04-14",
@@ -44,7 +42,7 @@ def assign_models_to_powers() -> Dict[str, str]:
         "RUSSIA": "gpt-4o",
         "TURKEY": "o4-mini",
     }
-    
+
     # TEST MODELS
     """
     return {
@@ -57,7 +55,7 @@ def assign_models_to_powers() -> Dict[str, str]:
         "TURKEY": "openrouter-google/gemini-2.5-flash-preview",
     }
     """
-    
+
 
 def gather_possible_orders(game: Game, power_name: str) -> Dict[str, List[str]]:
     """
@@ -74,15 +72,15 @@ def gather_possible_orders(game: Game, power_name: str) -> Dict[str, List[str]]:
 
 async def get_valid_orders(
     game: Game,
-    client, # This is the BaseModelClient instance
+    client,  # This is the BaseModelClient instance
     board_state,
     power_name: str,
     possible_orders: Dict[str, List[str]],
-    game_history, # This is GameHistory instance
+    game_history,  # This is GameHistory instance
     model_error_stats: Dict[str, Dict[str, int]],
     agent_goals: Optional[List[str]] = None,
     agent_relationships: Optional[Dict[str, str]] = None,
-    agent_private_diary_str: Optional[str] = None, # Added new parameter
+    agent_private_diary_str: Optional[str] = None,  # Added new parameter
     log_file_path: str = None,
     phase: str = None,
 ) -> List[str]:
@@ -98,57 +96,63 @@ async def get_valid_orders(
         board_state=board_state,
         power_name=power_name,
         possible_orders=possible_orders,
-        conversation_text=game_history, # Pass GameHistory instance
+        conversation_text=game_history,  # Pass GameHistory instance
         model_error_stats=model_error_stats,
         agent_goals=agent_goals,
         agent_relationships=agent_relationships,
-        agent_private_diary_str=agent_private_diary_str, # Pass the diary string
+        agent_private_diary_str=agent_private_diary_str,  # Pass the diary string
         log_file_path=log_file_path,
         phase=phase,
     )
-    
+
     # Initialize list to track invalid order information
     invalid_info = []
-    
+
     # Validate each order
     all_valid = True
     valid_orders = []
-    
-    if not isinstance(orders, list): # Ensure orders is a list before iterating
-        logger.warning(f"[{power_name}] Orders received from LLM is not a list: {orders}. Using fallback.")
-        model_error_stats[client.model_name]["order_decoding_errors"] += 1 # Use client.model_name
+
+    if not isinstance(orders, list):  # Ensure orders is a list before iterating
+        logger.warning(
+            f"[{power_name}] Orders received from LLM is not a list: {orders}. Using fallback."
+        )
+        model_error_stats[client.model_name]["order_decoding_errors"] += (
+            1  # Use client.model_name
+        )
         return client.fallback_orders(possible_orders)
 
     for move in orders:
         # Skip empty orders
         if not move or move.strip() == "":
             continue
-            
+
         # Handle special case for WAIVE
         if move.upper() == "WAIVE":
             valid_orders.append(move)
             continue
-            
+
         # Example move: "A PAR H" -> unit="A PAR", order_part="H"
         tokens = move.split(" ", 2)
         if len(tokens) < 3:
-            invalid_info.append(f"Order '{move}' is malformed; expected 'A PAR H' style.")
+            invalid_info.append(
+                f"Order '{move}' is malformed; expected 'A PAR H' style."
+            )
             all_valid = False
             continue
-            
+
         unit = " ".join(tokens[:2])  # e.g. "A PAR"
         order_part = tokens[2]  # e.g. "H" or "S A MAR"
 
         # Use the internal game validation method
-        if order_part == "B": # Build orders
+        if order_part == "B":  # Build orders
             validity = 1  # hack because game._valid_order doesn't support 'B'
-        elif order_part == "D": # Disband orders
-             # Check if the unit is actually one of the power's units
+        elif order_part == "D":  # Disband orders
+            # Check if the unit is actually one of the power's units
             if unit in game.powers[power_name].units:
-                validity = 1 # Simple check, engine handles full validation
+                validity = 1  # Simple check, engine handles full validation
             else:
                 validity = 0
-        else: # Movement, Support, Hold, Convoy, Retreat
+        else:  # Movement, Support, Hold, Convoy, Retreat
             try:
                 validity = game._valid_order(
                     game.powers[power_name], unit, order_part, report=1
@@ -164,11 +168,11 @@ async def get_valid_orders(
         else:
             invalid_info.append(f"Order '{move}' is invalid for {power_name}")
             all_valid = False
-    
+
     # Log validation results
     if invalid_info:
         logger.debug(f"[{power_name}] Invalid orders: {', '.join(invalid_info)}")
-    
+
     if all_valid and valid_orders:
         logger.debug(f"[{power_name}] All orders valid: {valid_orders}")
         return valid_orders
@@ -240,7 +244,9 @@ def normalize_and_compare_orders(
         issued_set = set()
         if pwr in issued_orders:
             try:
-                issued_set = {normalize_order(o) for o in issued_orders.get(pwr, []) if o}
+                issued_set = {
+                    normalize_order(o) for o in issued_orders.get(pwr, []) if o
+                }
             except Exception as e:
                 logger.error(f"Error normalizing issued orders for {pwr}: {e}")
 
@@ -248,7 +254,9 @@ def normalize_and_compare_orders(
         accepted_set = set()
         if pwr in accepted_orders_dict:
             try:
-                accepted_set = {normalize_order(o) for o in accepted_orders_dict.get(pwr, []) if o}
+                accepted_set = {
+                    normalize_order(o) for o in accepted_orders_dict.get(pwr, []) if o
+                }
             except Exception as e:
                 logger.error(f"Error normalizing accepted orders for {pwr}: {e}")
 
@@ -269,9 +277,9 @@ def load_prompt(filename: str) -> str:
     """Helper to load prompt text from file"""
     # Assuming execution from the root or that the path resolves correctly
     # Consider using absolute paths or pkg_resources if needed for robustness
-    prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', filename)
+    prompt_path = os.path.join(os.path.dirname(__file__), "prompts", filename)
     try:
-        with open(prompt_path, "r", encoding='utf-8') as f: # Added encoding
+        with open(prompt_path, "r", encoding="utf-8") as f:  # Added encoding
             return f.read().strip()
     except FileNotFoundError:
         logger.error(f"Prompt file not found: {prompt_path}")
@@ -281,61 +289,80 @@ def load_prompt(filename: str) -> str:
 
 # == New LLM Response Logging Function ==
 def log_llm_response(
-    log_file_path: str,
+    log_file_path: Path,
     model_name: str,
-    power_name: Optional[str], # Optional for non-power-specific calls like summary
+    power_name: Optional[str],  # Optional for non-power-specific calls like summary
     phase: str,
     response_type: str,
-    raw_input_prompt: str, # Added new parameter for the raw input
+    raw_input_prompt: str,  # Added new parameter for the raw input
     raw_response: str,
     success: str,  # Changed from bool to str
 ):
     """Appends a raw LLM response to a CSV log file."""
+    assert log_file_path is not None
     try:
         # Ensure the directory exists
         log_dir = os.path.dirname(log_file_path)
-        if log_dir: # Ensure log_dir is not empty (e.g., if path is just a filename)
-             os.makedirs(log_dir, exist_ok=True)
+        if log_dir:  # Ensure log_dir is not empty (e.g., if path is just a filename)
+            os.makedirs(log_dir, exist_ok=True)
 
         # Check if file exists to write header
         file_exists = os.path.isfile(log_file_path)
 
         with open(log_file_path, "a", newline="", encoding="utf-8") as csvfile:
             # Added "raw_input" to fieldnames
-            fieldnames = ["model", "power", "phase", "response_type", "raw_input", "raw_response", "success"]
+            fieldnames = [
+                "model",
+                "power",
+                "phase",
+                "response_type",
+                "raw_input",
+                "raw_response",
+                "success",
+            ]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
             if not file_exists:
                 writer.writeheader()  # Write header only if file is new
 
-            writer.writerow({
-                "model": model_name,
-                "power": power_name if power_name else "game", # Use 'game' if no specific power
-                "phase": phase,
-                "response_type": response_type,
-                "raw_input": raw_input_prompt, # Added raw_input to the row
-                "raw_response": raw_response,
-                "success": success,
-            })
+            writer.writerow(
+                {
+                    "model": model_name,
+                    "power": power_name
+                    if power_name
+                    else "game",  # Use 'game' if no specific power
+                    "phase": phase,
+                    "response_type": response_type,
+                    "raw_input": raw_input_prompt,  # Added raw_input to the row
+                    "raw_response": raw_response,
+                    "success": success,
+                }
+            )
     except Exception as e:
-        logger.error(f"Failed to log LLM response to {log_file_path}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to log LLM response to {log_file_path}: {e}", exc_info=True
+        )
 
 
 # == New Async LLM Wrapper with Logging ==
 async def run_llm_and_log(
-    client: 'BaseModelClient',
+    client: "BaseModelClient",
     prompt: str,
     log_file_path: str,  # Kept for context, but not used for logging here
-    power_name: Optional[str], # Kept for context, but not used for logging here
-    phase: str, # Kept for context, but not used for logging here
-    response_type: str, # Kept for context, but not used for logging here
+    power_name: Optional[str],  # Kept for context, but not used for logging here
+    phase: str,  # Kept for context, but not used for logging here
+    response_type: str,  # Kept for context, but not used for logging here
 ) -> str:
     """Calls the client's generate_response and returns the raw output. Logging is handled by the caller."""
-    raw_response = "" # Initialize in case of error
+    raw_response = ""  # Initialize in case of error
     try:
         raw_response = await client.generate_response(prompt)
     except Exception as e:
         # Log the API call error. The caller will decide how to log this in llm_responses.csv
-        logger.error(f"API Error during LLM call for {client.model_name}/{power_name}/{response_type} in phase {phase}: {e}", exc_info=True)
+        logger.error(
+            f"API Error during LLM call for {client.model_name}/{power_name}/{response_type} in phase {phase}: {e}",
+            exc_info=True,
+        )
         # raw_response remains "" indicating failure to the caller
     return raw_response
+
