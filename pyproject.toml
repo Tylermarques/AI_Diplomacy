@@ -1,5 +1,2 @@
 [tool.ruff]
-exclude = [
-    "diplomacy",
-    "docs"
-]
+exclude = ["diplomacy", "docs"]
